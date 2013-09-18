@@ -18,7 +18,7 @@ api_urls = {
     'authorize_url'    : 'http://twitter.com/oauth/authorize',
     'tweet_url'        : 'https://api.twitter.com/1.1/statuses/update.json',
     'github_commits'   : 'https://api.github.com/repos/defeo/defeo.github.io/commits/',
-    'blog_base'        : 'http://localhost:4000',
+    'blog_base'        : 'http://defeo.lu',
     'blog_posts'       : '/api/posts.json'
     }
 
@@ -40,7 +40,7 @@ class CheckCommits(RequestHandler):
     '''
     @w_config
     def post(self):
-        commits = json.loads(self.request.body)
+        commits = json.loads(self.request.get('payload'))
         # Fetch json summary of posts from the blog
         posts = fetch(api_urls['blog_base'] + api_urls['blog_posts'])
         if posts.status_code != 200:
@@ -55,6 +55,7 @@ class CheckCommits(RequestHandler):
                     taskqueue.add(url=worker_url, params={'commit-id': c['id'], 'posts': posts.content})
                     count += 1
 
+            logging.info('Considering %d commits.' % count)
             self.response.content_type = 'application/json'
             self.response.write('{"commits": %d}' % count)
 
@@ -90,8 +91,9 @@ class Tweet(RequestHandler):
                         logging.error('Post %s missing in list.' % f['filename'])
                         self.abort(500, 'Post seems to be missing in list.')
 
-                    tweet = u'New post: %s, %s%s. %s' % (post['title'], api_urls['blog_base'], post['url'], 
-                                                        ' '.join('#' + t for t in post['tags'][:2]))
+                    tweet = u'#Blog post %s.%s %s%s' % (post['title'],
+                                                        ''.join(' #' + t for t in post['tags'][:2]),
+                                                         api_urls['blog_base'], post['url'])
 
                     res = self._sign(api_urls['tweet_url'], 'POST', {'status': tweet})
         

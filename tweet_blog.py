@@ -69,7 +69,10 @@ class Tweet(RequestHandler):
         posts = json.loads(posts.content)
 
         # Fetch and parse commit data from github
-        commit = fetch(api_urls['github_commits'] + self.request.get('commit-id'),
+        commit = fetch((api_urls['github_commits'] + self.request.get('commit-id') + 
+                        "?client_id=%s&client_secret=%s" % 
+                        (self.app.config['tweet_blog']['github_id'],
+                         self.app.config['tweet_blog']['github_secret'])),
                        validate_certificate=True)
         if commit.status_code != 200:
             logging.error('Cannot fetch commit data. %s' % commit.content)

@@ -41,23 +41,17 @@ class CheckCommits(RequestHandler):
     @w_config
     def post(self):
         commits = json.loads(self.request.get('payload'))
-        # Fetch json summary of posts from the blog
-        posts = fetch(api_urls['blog_base'] + api_urls['blog_posts'])
-        if posts.status_code != 200:
-            logging.error('Cannot fetch post list. %s' % post.content)
-            self.abort(500, detail='Cannot fetch post list.')
-        else:
-            # Examine each commit in the payload of the request
-            count = 0
-            for c in commits["commits"]:
-                if c['message'].startswith(self._post_prefix):
-                    # If commit starts with the right prefix, launch a task to examine it
-                    taskqueue.add(url=worker_url, params={'commit-id': c['id'], 'posts': posts.content})
-                    count += 1
-
-            logging.info('Considering %d commits.' % count)
-            self.response.content_type = 'application/json'
-            self.response.write('{"commits": %d}' % count)
+        # Examine each commit in the payload of the request
+        count = 0
+        for c in commits["commits"]:
+            if c['message'].startswith(self._post_prefix):
+                # If commit starts with the right prefix, launch a task to examine it
+                taskqueue.add(url=worker_url, params={'commit-id': c['id']})
+                count += 1
+                
+        logging.info('Considering %d commits.' % count)
+        self.response.content_type = 'application/json'
+        self.response.write('{"commits": %d}' % count)
 
 
 class Tweet(RequestHandler):
@@ -67,18 +61,21 @@ class Tweet(RequestHandler):
     '''
     @w_config
     def post(self):
-        # Parse post list
-        posts = json.loads(self.request.get('posts'))
+        # Fetch and parse json summary of posts from the blog
+        posts = fetch(api_urls['blog_base'] + api_urls['blog_posts'])
+        if posts.status_code != 200:
+            logging.error('Cannot fetch post list. %s' % post.content)
+            self.abort(500, detail='Cannot fetch post list.')
+        posts = json.loads(posts.content)
 
-        # Fetch commit data from github
+        # Fetch and parse commit data from github
         commit = fetch(api_urls['github_commits'] + self.request.get('commit-id'),
                        validate_certificate=True)
         if commit.status_code != 200:
             logging.error('Cannot fetch commit data. %s' % commit.content)
-            self.abort(500, 'Cannot fetch commid data.')
-            
-        # Parse commit data
+            self.abort(500, 'Cannot fetch commit data.')
         commit = json.loads(commit.content)
+
         if commit['commit']['message'].startswith(self._post_prefix):
             # If commit starts with right prefix, look for new files in the post directory
             count = 0
